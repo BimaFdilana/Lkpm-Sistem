@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "project": {
+    "name": "app",
+    "productType": null,
+    "stack": [
+      "tailwind-v4",
+      "vite"
+    ]
+  },
+  "sources": {
+    "tokens": [],
+    "components": [],
+    "assets": [],
+    "instructions": [
+      "AGENTS.md",
+      "CLAUDE.md"
+    ]
+  },
+  "design": {
+    "colorMode": "light",
+    "colors": {
+      "ink": "#0b1f3a",
+      "brand": "#007f75",
+      "accent": "#ed8a24",
+      "canvas": "#f3f7fb"
+    },
+    "typography": {
+      "fontFamily": "Instrument Sans"
+    },
+    "spacing": {
+      "base": "4px"
+    },
+    "radius": {
+      "card": "16px"
+    },
+    "shadows": {
+      "card": "soft, low contrast"
+    },
+    "motion": {},
+    "density": "comfortable"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": [],
+    "patterns": []
+  },
+  "constraints": {
+    "must": [],
+    "avoid": []
+  },
+  "decisions": [
+    "Use a confident civic-workspace palette: navy for structure, teal for primary action, amber for priority and coral only for alerts.",
+    "Use a persistent sidebar from tablet upward and an accessible collapsible navigation panel on mobile.",
+    "Use compact metric cards, clear status pills, and responsive card alternatives for data tables.",
+    "Keep operational verification distinct from LKPM OSS reporting; show its current state as a compact status pill while retaining the follow-up history as the audit trail."
+  ],
+  "evidence": [
+    {
+      "fact": "project.instructions",
+      "source": "AGENTS.md"
+    },
+    {
+      "fact": "project.instructions",
+      "source": "CLAUDE.md"
+    },
+    {
+      "fact": "project.stack:tailwind-v4",
+      "source": "package.json"
+    },
+    {
+      "fact": "project.stack:vite",
+      "source": "package.json"
+    }
+  ],
+  "generatedAt": "2026-09-09T09:11:55.854Z"
+}

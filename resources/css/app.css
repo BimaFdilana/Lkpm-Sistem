@@ -1,0 +1,143 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+    --color-ink: #0b1f3a;
+    --color-brand: #007f75;
+    --color-mist: #f3f7fb;
+    --color-coral: #e65949;
+    --color-amber: #ed8a24;
+    --color-sky: #3178c6;
+}
+
+@layer base {
+    html {
+        background: var(--color-mist);
+    }
+
+    body {
+        min-width: 320px;
+        background:
+            radial-gradient(circle at 98% -5%, rgb(0 127 117 / 9%), transparent 29rem),
+            radial-gradient(circle at 3% 100%, rgb(49 120 198 / 7%), transparent 32rem),
+            var(--color-mist);
+    }
+
+    button,
+    [type='button'],
+    [type='submit'] {
+        cursor: pointer;
+    }
+
+    input,
+    select,
+    textarea {
+        border-color: #cbd5e1;
+        background-color: #fff;
+        padding: .625rem .75rem;
+        transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+        border-color: var(--color-brand);
+        outline: 2px solid transparent;
+        box-shadow: 0 0 0 3px rgb(0 127 117 / 16%);
+    }
+}
+
+@layer components {
+    .app-sidebar-link {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        border-radius: .875rem;
+        padding: .75rem .875rem;
+        color: rgb(226 232 240);
+        transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+    }
+
+    .app-sidebar-link:hover {
+        background: rgb(255 255 255 / 10%);
+        color: #fff;
+        transform: translateX(2px);
+    }
+
+    .app-sidebar-link[aria-current='page'] {
+        background: rgb(255 255 255 / 15%);
+        color: #fff;
+        box-shadow: inset 3px 0 0 #4de0cf;
+    }
+
+    .app-mobile-nav[data-state='closed'] {
+        display: none;
+    }
+
+    .page-eyebrow {
+        font-size: .75rem;
+        font-weight: 800;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: var(--color-brand);
+    }
+
+    .page-title {
+        margin-top: .45rem;
+        color: var(--color-ink);
+        font-size: clamp(1.7rem, 3.5vw, 2.35rem);
+        font-weight: 750;
+        letter-spacing: -.035em;
+        line-height: 1.1;
+    }
+
+    .page-copy {
+        margin-top: .65rem;
+        max-width: 46rem;
+        color: #52647c;
+        font-size: .95rem;
+        line-height: 1.65;
+    }
+
+    .surface-card {
+        border: 1px solid rgb(203 213 225 / 80%);
+        border-radius: 1rem;
+        background: #fff;
+        box-shadow: 0 10px 28px rgb(15 23 42 / 5%);
+    }
+
+    .primary-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .5rem;
+        border-radius: .75rem;
+        background: var(--color-brand);
+        padding: .7rem 1rem;
+        color: #fff;
+        font-size: .875rem;
+        font-weight: 700;
+        box-shadow: 0 6px 14px rgb(0 127 117 / 20%);
+        transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+    }
+
+    .primary-action:hover {
+        background: #06685f;
+        box-shadow: 0 9px 18px rgb(0 127 117 / 26%);
+        transform: translateY(-1px);
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 9999px;
+        padding: .3rem .65rem;
+        font-size: .7rem;
+        font-weight: 750;
+        line-height: 1;
+    }
+}
