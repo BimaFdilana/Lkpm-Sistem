@@ -14,7 +14,18 @@ class QuarterlyProjectBaseline extends Model
         return ['baseline_is_estimated' => 'boolean', 'calculated_at' => 'datetime'];
     }
 
-    public function project(): BelongsTo { return $this->belongsTo(Project::class); }
-    public function baselineReport(): BelongsTo { return $this->belongsTo(LkpmReport::class, 'baseline_report_id'); }
-    public function endingReport(): BelongsTo { return $this->belongsTo(LkpmReport::class, 'ending_report_id'); }
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    public function baselineReport(): BelongsTo
+    {
+        return $this->belongsTo(LkpmReport::class, 'baseline_report_id');
+    }
+
+    public function endingReport(): BelongsTo
+    {
+        return $this->belongsTo(LkpmReport::class, 'ending_report_id');
+    }
 }

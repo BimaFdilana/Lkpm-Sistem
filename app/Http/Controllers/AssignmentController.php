@@ -2,170 +2,124 @@
 
 namespace App\Http\Controllers;
 
+use App\AssignmentQueueService;
 use App\AuditLogger;
 use App\GapCalculator;
 use App\Http\Requests\UpdateAssignmentPicRequest;
 use App\Models\Assignment;
-use App\Models\Company;
-use App\Models\LkpmReport;
 use App\Models\TargetPeriod;
 use App\Models\User;
-use App\PriorityAssignmentPlanner;
-use Illuminate\Support\Collection;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 
 class AssignmentController extends Controller
 {
-    public function index(): View
+    public function index(AssignmentQueueService $queue): View
     {
         $period = TargetPeriod::query()->where('is_active', true)->first();
+        $isPic = auth()->user()->role === 'pic';
+        $tab = $isPic && request()->query('tab') === 'history' ? 'history' : 'tasks';
         $query = Assignment::query()
-            ->with(['company.projects.reports', 'pic', 'followUps' => fn ($query) => $query->latest()->limit(1)])
+            ->with([
+                'company.projects.reports',
+                'pic',
+                'followUps' => fn ($query) => $query
+                    ->when($isPic, fn ($followUps) => $followUps->where('created_by', auth()->id()))
+                    ->latest()
+                    ->limit(1),
+            ])
             ->where('status', 'active')
+            ->when($isPic, fn ($query) => $query->where('is_task_active', true))
             ->when($period, fn ($query) => $query->where('year', $period->year)->where('quarter', $period->quarter))
             ->orderByDesc('is_task_active')
             ->orderBy('priority_rank');
-        if (auth()->user()->role === 'pic') {
+        $taskCount = null;
+        $historyCount = null;
+
+        if ($isPic) {
             $query->where('pic_id', auth()->id());
+            $ownFollowUps = fn ($followUps) => $followUps->where('created_by', auth()->id())->where('contact_status', '!=', 'belum_dihubungi');
+            $taskCount = (clone $query)->whereDoesntHave('followUps', $ownFollowUps)->count();
+            $historyCount = (clone $query)->whereHas('followUps', $ownFollowUps)->count();
+            $query = $tab === 'history'
+                ? $query->whereHas('followUps', $ownFollowUps)
+                : $query->whereDoesntHave('followUps', $ownFollowUps);
         }
 
-        return view('assignments.index', ['assignments' => $query->paginate(20), 'pics' => User::query()->where('role', 'pic')->orderBy('name')->get(), 'period' => $period]);
-    }
+        $candidateCompanies = collect();
+        $snapshotDate = null;
+        $assignedIds = [];
+        if (! $isPic && $period !== null) {
+            $snapshotDate = $queue->latestSnapshotDate($period);
+            $candidateCompanies = $queue->rankedCompanies($period, $snapshotDate);
+            $assignedIds = Assignment::query()->where('year', $period->year)->where('quarter', $period->quarter)->pluck('company_id')->all();
+        }
+        $candidatePage = max(1, (int) request()->query('candidate_page', 1));
+        $candidatePaginator = (new LengthAwarePaginator(
+            $candidateCompanies->slice(($candidatePage - 1) * 50, 50)->values(),
+            $candidateCompanies->count(), 50, $candidatePage,
+            ['path' => route('assignments.index'), 'query' => request()->query(), 'pageName' => 'candidate_page']
+        ))->fragment('candidates');
 
-    public function rebalance(PriorityAssignmentPlanner $planner): RedirectResponse
-    {
-        $period = TargetPeriod::query()->where('is_active', true)->first();
-        abort_unless($period, 422, 'Aktifkan periode kerja terlebih dahulu.');
-        $companies = Company::query()
-            ->whereNotIn('business_scale', ['Usaha Mikro', 'Usaha Kecil'])
-            ->with(['projects.reports'])
-            ->get();
-        $pics = User::query()->where('role', 'pic')->orderBy('name')->get();
-
-        abort_if($pics->isEmpty(), 422, 'Tambahkan minimal satu PIC aktif terlebih dahulu.');
-        abort_if($companies->isEmpty(), 422, 'Belum ada perusahaan Non-UMK yang dapat dibagikan.');
-        DB::transaction(function () use ($companies, $pics, $period, $planner): void {
-            Assignment::query()->where('year', $period->year)->where('quarter', $period->quarter)->where('status', 'active')->update(['status' => 'replaced']);
-
-            foreach ($planner->plan($companies, $pics, $period) as $plan) {
-                Assignment::create([
-                    'company_id' => $plan['company']->id,
-                    'pic_id' => $plan['pic_id'],
-                    'assigned_by' => auth()->id(),
-                    'year' => $period->year,
-                    'quarter' => $period->quarter,
-                    'status' => 'active',
-                    'priority_rank' => $plan['priority_rank'],
-                    'is_primary_target' => $plan['is_primary_target'],
-                    'potential_at_assignment' => $plan['potential'],
-                    'assigned_at' => now(),
-                    'reason' => 'Pembagian metode ular: jumlah perusahaan seimbang, urutan berdasarkan prioritas LKPM dan potensi.',
-                ]);
-            }
-        });
-
-        return back()->with('status', 'Assignment PIC diperbarui dengan jumlah perusahaan seimbang dan prioritas potensi tersebar.');
-    }
-
-    public function candidates(): View
-    {
-        $period = TargetPeriod::query()->where('is_active', true)->first();
-        abort_unless($period, 422, 'Aktifkan periode kerja terlebih dahulu.');
-
-        $candidates = $this->candidatePool($period);
-        $primaryCandidates = $candidates->take(100)->values();
-        $reserveCandidates = $candidates->slice(100, 100)->values();
-
-        return view('assignments.candidates', [
+        return view('assignments.index', [
+            'assignments' => $query->paginate(20)->withQueryString(),
+            'pics' => $isPic ? collect() : User::query()->where('role', 'pic')->orderBy('name')->get(),
             'period' => $period,
-            'primaryCandidates' => $primaryCandidates,
-            'reserveCandidates' => $reserveCandidates,
-            'primaryPotential' => (int) $primaryCandidates->sum('potential'),
+            'isPic' => $isPic,
+            'tab' => $tab,
+            'taskCount' => $taskCount,
+            'historyCount' => $historyCount,
+            'candidateCompanies' => $candidatePaginator,
+            'candidateSnapshotDate' => $snapshotDate,
+            'candidateEligibleCount' => $candidateCompanies->where('assignable', true)->count(),
+            'candidateAssignedIds' => $assignedIds,
+            'candidateHasAssignments' => $assignedIds !== [],
         ]);
     }
 
-    public function assignCandidates(): RedirectResponse
+    public function rebalance(AssignmentQueueService $queue): RedirectResponse
+    {
+        $period = TargetPeriod::query()->where('is_active', true)->first();
+        abort_unless($period, 422, 'Aktifkan periode kerja terlebih dahulu.');
+        $pics = User::query()->where('role', 'pic')->orderBy('name')->get();
+        abort_if($pics->isEmpty(), 422, 'Tambahkan minimal satu PIC aktif terlebih dahulu.');
+        abort_if($queue->latestSnapshotDate($period) === null, 422, 'Buat snapshot prioritas harian terlebih dahulu.');
+        $count = $queue->distributeInitial($period, $pics, auth()->id());
+        abort_if($count === 0, 422, 'Tugas periode ini sudah dibagikan atau belum ada perusahaan dengan sisa potensi. Riwayat tugas tidak dihapus.');
+
+        return back()->with('status', "{$count} perusahaan awal dibagi rata ke PIC dari antrean prioritas.");
+    }
+
+    public function candidates(AssignmentQueueService $queue): View
+    {
+        return $this->index($queue);
+    }
+
+    public function assignCandidates(AssignmentQueueService $queue): RedirectResponse
     {
         $period = TargetPeriod::query()->where('is_active', true)->first();
         abort_unless($period, 422, 'Aktifkan periode kerja terlebih dahulu.');
         $pics = User::query()->where('role', 'pic')->orderBy('name')->get();
         abort_if($pics->isEmpty(), 422, 'Tambahkan minimal satu PIC aktif terlebih dahulu.');
 
-        $candidates = $this->candidatePool($period);
-        $primaryCandidates = $candidates->take(100)->values();
-        $reserveCandidates = $candidates->slice(100, 100)->values();
-        abort_if($primaryCandidates->isEmpty(), 422, 'Belum ada kandidat utama yang memenuhi kriteria.');
+        $snapshotDate = $queue->latestSnapshotDate($period);
+        abort_if($snapshotDate === null, 422, 'Buat snapshot prioritas harian terlebih dahulu sebelum membuat assignment PIC.');
+        $count = $queue->distributeInitial($period, $pics, auth()->id());
+        abort_if($count === 0, 422, 'Tugas periode ini sudah dibagikan atau belum ada perusahaan dengan sisa potensi. Riwayat tugas tidak dihapus.');
 
-        $pool = $primaryCandidates->map(fn (Company $company) => ['company' => $company, 'queue_type' => 'primary'])
-            ->concat($reserveCandidates->map(fn (Company $company) => ['company' => $company, 'queue_type' => 'reserve']))
-            ->values();
-
-        DB::transaction(function () use ($period, $pics, $pool): void {
-            Assignment::query()->where('year', $period->year)->where('quarter', $period->quarter)->where('status', 'active')->update(['status' => 'replaced']);
-            foreach ($pool as $index => $item) {
-                $round = intdiv($index, $pics->count());
-                $position = $index % $pics->count();
-                $picIndex = $round % 2 === 0 ? $position : $pics->count() - 1 - $position;
-                $isPrimary = $item['queue_type'] === 'primary';
-                Assignment::create([
-                    'company_id' => $item['company']->id,
-                    'pic_id' => $pics->values()->get($picIndex)->id,
-                    'assigned_by' => auth()->id(),
-                    'year' => $period->year,
-                    'quarter' => $period->quarter,
-                    'status' => 'active',
-                    'priority_rank' => $index + 1,
-                    'is_primary_target' => $isPrimary,
-                    'queue_type' => $item['queue_type'],
-                    'is_task_active' => $isPrimary,
-                    'activated_at' => $isPrimary ? now() : null,
-                    'potential_at_assignment' => (int) $item['company']->potential,
-                    'assigned_at' => now(),
-                    'reason' => $isPrimary ? 'Kandidat utama: dibagi rata metode ular.' : 'Kandidat cadangan: standby dan akan aktif otomatis bila proyeksi tim kurang dari buffer.',
-                ]);
-            }
-        });
-
-        return redirect()->route('assignments.index')->with('status', "Assignment dibuat dari {$primaryCandidates->count()} kandidat utama dan {$reserveCandidates->count()} cadangan standby.");
+        return redirect()->route('assignments.index')->with('status', "{$count} perusahaan awal dibagi rata ke PIC. Berikutnya masuk otomatis setelah tindak lanjut.");
     }
 
-    /** @return Collection<int, Company> */
-    private function candidatePool(TargetPeriod $period): Collection
+    public function assignInitialVerification(AssignmentQueueService $queue): RedirectResponse
     {
-        $reportQuarter = str_replace('TW ', 'Triwulan ', $period->quarter);
-        $latestReportIds = LkpmReport::query()
-            ->selectRaw('project_id, MAX(id) as latest_id')
-            ->where('is_canonical', true)
-            ->whereNotNull('project_id')
-            ->groupBy('project_id');
-
-        return Company::query()
-            ->select(['companies.id', 'companies.name', 'companies.nib', 'companies.district'])
-            ->selectRaw('COUNT(DISTINCT projects.id) as project_count')
-            ->selectRaw('SUM(CASE WHEN projects.planned_investment > COALESCE(latest_report.accumulated_investment, 0) THEN projects.planned_investment - COALESCE(latest_report.accumulated_investment, 0) ELSE 0 END) as potential')
-            ->join('projects', 'projects.company_id', '=', 'companies.id')
-            ->leftJoinSub($latestReportIds, 'latest_report_id', fn ($join) => $join->on('latest_report_id.project_id', '=', 'projects.id'))
-            ->leftJoin('lkpm_reports as latest_report', 'latest_report.id', '=', 'latest_report_id.latest_id')
-            ->whereNotIn('companies.business_scale', ['Usaha Mikro', 'Usaha Kecil'])
-            ->whereDoesntHave('projects.reports', fn ($query) => $query
-                ->where('is_canonical', true)
-                ->where('report_year', $period->year)
-                ->where('report_quarter', $reportQuarter)
-                ->where('report_status', 'Disetujui'))
-            ->groupBy('companies.id', 'companies.name', 'companies.nib', 'companies.district')
-            ->havingRaw('SUM(CASE WHEN projects.planned_investment > COALESCE(latest_report.accumulated_investment, 0) THEN projects.planned_investment - COALESCE(latest_report.accumulated_investment, 0) ELSE 0 END) > 0')
-            ->orderByDesc('potential')
-            ->orderBy('companies.name')
-            ->limit(200)
-            ->get();
+        return $this->assignCandidates($queue);
     }
 
     public function show(Assignment $assignment, GapCalculator $calculator): View
     {
         abort_unless(auth()->user()->role === 'kepala_bagian' || $assignment->pic_id === auth()->id(), 403);
-        $assignment->load(['company.projects.reports', 'pic', 'followUps.createdBy']);
+        $assignment->load(['company.contactSourceReport', 'company.projects.reports', 'pic', 'followUps.createdBy']);
         $projectRows = $assignment->company->projects
             ->sortBy('project_code')
             ->map(function ($project) use ($calculator): array {

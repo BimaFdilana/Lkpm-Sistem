@@ -25,6 +25,10 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        if ($request->user()->role === 'pic') {
+            return redirect()->route('assignments.index');
+        }
+
         return redirect()->intended(route('dashboard'));
     }
 

@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('annual_target_versions', function (Blueprint $table): void {
@@ -24,6 +25,7 @@ return new class extends Migration {
             $table->timestamp('target_frozen_at')->nullable()->after('is_closed');
         });
     }
+
     public function down(): void
     {
         Schema::table('target_periods', function (Blueprint $table): void {

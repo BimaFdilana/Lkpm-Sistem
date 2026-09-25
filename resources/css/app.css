@@ -33,28 +33,34 @@
         cursor: pointer;
     }
 
-    input,
+    input:not([type='hidden']):not([type='checkbox']):not([type='radio']),
     select,
     textarea {
-        border-color: #cbd5e1;
+        border: 1px solid #94a3b8;
         background-color: #fff;
         padding: .625rem .75rem;
         transition: border-color 150ms ease, box-shadow 150ms ease;
     }
 
-    input:focus,
+    input:not([type='hidden']):not([type='checkbox']):not([type='radio']):focus,
     select:focus,
     textarea:focus {
         border-color: var(--color-brand);
         outline: 2px solid transparent;
         box-shadow: 0 0 0 3px rgb(0 127 117 / 16%);
     }
+
+    input[aria-invalid='true'],
+    select[aria-invalid='true'],
+    textarea[aria-invalid='true'] {
+        border-color: var(--color-coral);
+    }
 }
 
 @layer components {
     .app-sidebar-link {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: .75rem;
         border-radius: .875rem;
         padding: .75rem .875rem;
@@ -66,6 +72,46 @@
         background: rgb(255 255 255 / 10%);
         color: #fff;
         transform: translateX(2px);
+    }
+
+    .app-sidebar-index {
+        display: grid;
+        width: 1.5rem;
+        height: 1.5rem;
+        flex: none;
+        place-items: center;
+        border-radius: .375rem;
+        background: rgb(255 255 255 / 10%);
+        font-size: .625rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .app-sidebar-title,
+    .app-sidebar-subtitle {
+        display: block;
+    }
+
+    .app-sidebar-title {
+        font-weight: 700;
+        line-height: 1.25rem;
+    }
+
+    .app-sidebar-subtitle {
+        margin-top: .125rem;
+        color: rgb(203 213 225 / 82%);
+        font-size: .6875rem;
+        font-weight: 500;
+        line-height: 1rem;
+    }
+
+    .app-sidebar-section {
+        padding: 0 .875rem;
+        color: rgb(94 234 212 / 85%);
+        font-size: .625rem;
+        font-weight: 800;
+        letter-spacing: .12em;
+        text-transform: uppercase;
     }
 
     .app-sidebar-link[aria-current='page'] {

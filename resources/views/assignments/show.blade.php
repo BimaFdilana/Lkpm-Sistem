@@ -37,6 +37,7 @@
                 <div><dt class="text-slate-500">Email</dt><dd class="mt-1 font-medium">{{ $assignment->company->contact_email ?: 'Belum tersedia' }}</dd></div>
                 <div><dt class="text-slate-500">Jabatan kontak</dt><dd class="mt-1 font-medium">{{ $assignment->company->contact_position ?: 'Belum tersedia' }}</dd></div>
             </dl>
+            <p class="mt-5 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">@if($assignment->company->contactSourceReport)Sumber kontak: LKPM {{ $assignment->company->contactSourceReport->report_year }} {{ $assignment->company->contactSourceReport->report_quarter }}@if($assignment->company->contactSourceReport->report_number) · No. {{ $assignment->company->contactSourceReport->report_number }}@endif. Disinkronkan {{ $assignment->company->contact_synced_at?->translatedFormat('d M Y H:i') }}.@else Sumber kontak belum dapat ditelusuri; lakukan konfirmasi sebelum digunakan.@endif</p>
         </div>
 
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-6">

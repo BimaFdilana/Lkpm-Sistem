@@ -10,20 +10,22 @@
                 @endif
             </h2>
             <p class="page-copy">
-                @if ($role === 'kepala_dinas') Pantau pencapaian target tanpa mengubah data operasional.
+                @if ($role === 'kepala_dinas') Pantau capaian target, jadwal, serta kinerja PIC; target tahunan dapat diperbarui dari dashboard.
                 @elseif ($role === 'kepala_bagian') Kelola data, pembagian PIC, dan tindak lanjut perusahaan sebelum periode pelaporan.
                 @elseif ($role === 'pic') Fokus pada perusahaan yang menjadi tanggung jawab Anda pada periode ini.
                 @else Pantau kesiapan data sumber sebelum dipakai oleh tim operasional.
                 @endif
             </p>
         </div>
-        @if ($role === 'kepala_dinas')<a href="{{ route('annual-targets.index') }}" class="primary-action">Kelola target tahunan <span aria-hidden="true">→</span></a>
-        @elseif ($role === 'kepala_bagian')<a href="{{ route('priority.index') }}" class="primary-action">Buka prioritas harian <span aria-hidden="true">→</span></a>
+        @if ($role === 'kepala_bagian')<div class="text-right">@if($latestPrioritySnapshot)<p class="mb-2 text-xs font-semibold text-slate-500">Snapshot terakhir {{ $latestPrioritySnapshot->snapshot_date->translatedFormat('d M Y') }}@if($latestPrioritySnapshot->importBatch) · batch #{{ $latestPrioritySnapshot->importBatch->id }}@endif</p>@else<p class="mb-2 text-xs font-semibold text-amber-700">Belum ada snapshot periode aktif</p>@endif<form method="POST" action="{{ route('priority.snapshot') }}">@csrf<button class="primary-action disabled:cursor-not-allowed disabled:opacity-50" type="submit" @disabled(! $target?->is_active)>{{ $target?->is_active ? 'Buat Snapshot Hari Ini' : 'Aktifkan Periode Terlebih Dahulu' }} <span aria-hidden="true">→</span></button></form></div>
         @elseif ($role === 'pic')<a href="{{ route('assignments.index') }}" class="primary-action">Buka tugas saya <span aria-hidden="true">→</span></a>
         @elseif ($role === 'programmer')<a href="{{ route('imports.index') }}" class="primary-action">Buka impor data <span aria-hidden="true">→</span></a>@endif
     </section>
 
     @if ($role === 'kepala_dinas')
+        @include('dashboard.kadis')
+    @else
+    @if (false)
         <section class="mt-7 overflow-hidden rounded-3xl bg-ink p-6 text-white shadow-xl shadow-slate-900/10 sm:p-8">
             <div class="flex flex-wrap items-start justify-between gap-5"><div><p class="text-xs font-bold uppercase tracking-[.16em] text-teal-300">Posisi target tahunan</p><h3 class="mt-3 text-2xl font-bold tracking-tight">Rp {{ number_format($annualRemaining / 1000000000000, 2, ',', '.') }} T masih perlu dikejar</h3><p class="mt-2 max-w-xl text-sm leading-6 text-slate-300">Target tahunan Rp {{ number_format($annualTarget / 1000000000000, 1, ',', '.') }} T, dengan realisasi dasar sebelum periode sebesar Rp {{ number_format($baselineRealization / 1000000000000, 2, ',', '.') }} T.</p></div><span class="status-pill bg-white/10 text-teal-200">{{ $target?->quarter ?? 'TW III' }} {{ $target?->year ?? 2026 }}</span></div>
             <div class="mt-7 grid gap-3 sm:grid-cols-3"><div class="rounded-2xl bg-white/8 p-4"><p class="text-xs text-slate-300">Target TW III</p><p class="mt-2 text-2xl font-bold">Rp {{ number_format($quarterTarget / 1000000000000, 3, ',', '.') }} T</p></div><div class="rounded-2xl bg-white/8 p-4"><p class="text-xs text-slate-300">Realisasi valid TW III</p><p class="mt-2 text-2xl font-bold">Rp {{ number_format($validRealization / 1000000000, 1, ',', '.') }} M</p></div><div class="rounded-2xl bg-white/8 p-4"><p class="text-xs text-slate-300">Kemajuan target TW III</p><p class="mt-2 text-2xl font-bold">{{ number_format($targetProgress, 1, ',', '.') }}%</p></div></div>
@@ -67,10 +69,11 @@
             <article class="surface-card p-5"><p class="text-sm font-medium text-slate-500">{{ $role === 'programmer' ? 'Data perusahaan siap' : 'Perusahaan dalam tugas PIC' }}</p><p class="mt-3 text-3xl font-bold tracking-tight text-ink">{{ number_format($role === 'programmer' ? $companies : $assignments) }}</p><p class="mt-4 text-xs text-slate-500">{{ $role === 'programmer' ? 'siap diproses operasional' : 'dari '.number_format($companies).' perusahaan' }}</p></article>
         </section>
     @endif
+    @endif
 
     @if ($role === 'programmer')
         <section class="surface-card mt-7 overflow-hidden"><div class="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><p class="page-eyebrow">Aktivitas</p><h3 class="mt-1 font-bold text-ink">Lima impor terbaru</h3></div><a href="{{ route('imports.index') }}" class="text-sm font-bold text-brand hover:underline">Kelola impor</a></div><div class="divide-y divide-slate-100">@forelse ($importBatches as $batch)<div class="flex items-center justify-between gap-4 px-5 py-4 text-sm"><div class="min-w-0"><p class="truncate font-bold text-ink">{{ $batch->original_name }}</p><p class="mt-1 text-xs text-slate-500">{{ $batch->created_at->format('d M Y · H:i') }}</p></div><span class="status-pill bg-slate-100 text-slate-600">{{ $batch->status }}</span></div>@empty<p class="px-5 py-10 text-sm text-slate-500">Belum ada file impor.</p>@endforelse</div></section>
-    @elseif ($role !== 'pic')
+    @elseif ($role === 'kepala_bagian')
         <section class="mt-7 grid gap-5 lg:grid-cols-2">
             <article class="surface-card p-6"><span class="status-pill bg-amber-100 text-amber-800">Perlu perhatian</span><p class="mt-5 text-4xl font-bold tracking-tight text-ink">{{ number_format($pendingReports) }}</p><h3 class="mt-2 font-bold text-ink">Laporan belum Disetujui</h3><p class="mt-1 text-sm leading-6 text-slate-600">Gunakan daftar assignment untuk mengarahkan tindak lanjut perusahaan.</p></article>
             <article class="rounded-2xl border border-teal-200 bg-teal-50 p-6"><span class="status-pill bg-white text-brand">Aturan realisasi</span><h3 class="mt-4 text-lg font-bold text-teal-950">Hanya laporan Disetujui yang dihitung.</h3><p class="mt-2 text-sm leading-6 text-teal-900">Proyek tanpa riwayat LKPM tetap masuk antrean verifikasi; sistem tidak langsung menganggap realisasinya sebagai angka valid Rp0.</p></article>

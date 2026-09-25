@@ -1,58 +1,112 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Sistem Target Investasi Satgas LKPM
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Aplikasi internal DPMPTSP untuk mengolah DP.Proyek dan LKPM Non-UMK, menyusun prioritas perusahaan, membagi tugas PIC, serta memantau capaian investasi per triwulan dan tahunan.
 
-## About Laravel
+## Kebutuhan server
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Ubuntu Server 24.04 LTS.
+- Nginx.
+- PHP 8.4-FPM beserta `bcmath`, `curl`, `dom`, `fileinfo`, `intl`, `mbstring`, `openssl`, `pcntl`, `pdo_mysql`, `xml`, `zip`, dan OPcache.
+- MySQL 8.
+- Python 3.12 dan `openpyxl==3.1.5`.
+- Composer 2 dan Node.js 22 untuk proses deployment.
+- Supervisor untuk queue worker.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Spesifikasi awal yang disarankan adalah 4 vCPU, RAM 8 GB, dan NVMe SSD 100 GB.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Deployment
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install --no-dev --optimize-autoloader
+python3 -m venv .venv
+.venv/bin/pip install -r python/requirements.txt
+npm ci
+npm run build
+php artisan migrate --force
+php artisan optimize
+php artisan reload
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Salin `.env.production.example` menjadi `.env`, isi seluruh kredensial, lalu jalankan `php artisan key:generate`. Jangan gunakan akun MySQL `root`. JSON OAuth harus berada di direktori `secure` yang tidak dapat diakses dari web.
 
-## Contributing
+Web root Nginx wajib diarahkan ke direktori `public`. Batas unggahan minimal 60 MB:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```nginx
+client_max_body_size 60M;
+```
 
-## Code of Conduct
+Worker Supervisor harus memakai pengaturan berikut:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```ini
+[program:lkpm-worker]
+command=/usr/bin/php /var/www/lkpm/artisan queue:work database --sleep=3 --tries=2 --timeout=1200
+directory=/var/www/lkpm
+autostart=true
+autorestart=true
+stopwaitsecs=1260
+user=www-data
+redirect_stderr=true
+stdout_logfile=/var/www/lkpm/storage/logs/worker.log
+```
 
-## Security Vulnerabilities
+Scheduler dijalankan setiap menit. Aplikasi sendiri akan membuat snapshot setelah `PRIORITY_SNAPSHOT_TIME` dan menunggu sampai proses impor selesai:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```cron
+* * * * * cd /var/www/lkpm && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+```
 
-## License
+## Alur impor
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+1. Kepala Bagian atau Programmer mengunggah DP.Proyek, LKPM Non-UMK, atau Peta Sektor.
+2. File disimpan lokal dan di folder sumber Google Drive.
+3. Queue menjalankan normalisasi Python dan penyimpanan MySQL.
+4. Impor berhasil dipindahkan ke `05-ARSIP` tanpa menghapus file.
+5. Impor gagal dipindahkan ke `04-IMPORT-GAGAL`.
+6. Jika pemindahan Drive gagal tetapi data valid, batch tetap `ready` dan tombol pengulangan tersedia.
+7. File identik ditolak berdasarkan checksum; laporan logis yang sama diperbarui, bukan diduplikasi.
+
+## Alur periode dan assignment
+
+1. Kadis menetapkan target tahunan beserta alokasi lengkap TW I–IV.
+2. Kepala Bagian membuat dan mengaktifkan periode kerja.
+3. Setelah impor pagi selesai, sistem membuat snapshot prioritas harian.
+4. Kepala Bagian memeriksa Candidates dan membagikan maksimal 100 perusahaan awal secara rata kepada PIC.
+5. PIC melihat detail perusahaan dan mencatat hasil kontak, konfirmasi, serta verifikasi.
+6. Perusahaan yang sudah ditindaklanjuti berpindah ke History dan tugas prioritas berikutnya masuk otomatis.
+7. Nilai indikatif PIC tidak dihitung sebagai realisasi resmi sampai LKPM berstatus `Disetujui` diimpor.
+8. Assignment lama tetap tersimpan ketika triwulan baru diaktifkan.
+
+## Rekonsiliasi
+
+Impor DP.Proyek baru otomatis menautkan laporan lama yang kode normalisasinya sama. Pemetaan manual hanya dilakukan Kepala Bagian setelah verifikasi dokumen resmi. Daftar kode belum tertaut dapat difilter dan diekspor dari menu Rekonsiliasi.
+
+Setelah perbaikan algoritme historis atau pembaruan besar DP.Proyek, bangun ulang baseline turunan setelah backup:
+
+```bash
+php artisan priority:rebuild-baselines --year=2026 --quarter="TW III" --force
+```
+
+Perintah tersebut tidak menghapus snapshot historis.
+
+## Backup dan pemulihan
+
+Backup database dan file aplikasi harus disimpan di mesin berbeda:
+
+```bash
+mysqldump --single-transaction --routines --triggers -u lkpm_backup -p lkpm_production | gzip > lkpm-$(date +%F).sql.gz
+tar -czf storage-$(date +%F).tar.gz storage/app
+```
+
+Pemulihan harus diuji berkala di database simulasi, bukan langsung pada produksi.
+
+## Pemeriksaan sebelum rilis
+
+```bash
+php artisan test --compact
+vendor/bin/pint --dirty --format agent
+npm run build
+composer audit --locked
+npm audit --omit=dev
+php artisan route:list --except-vendor
+php artisan migrate:status
+```

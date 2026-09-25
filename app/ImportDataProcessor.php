@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\ImportBatch;
 use App\Models\LkpmReport;
 use App\Models\Project;
+use App\Models\ProjectCodeMapping;
 use App\Models\Sector;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
@@ -121,6 +122,14 @@ class ImportDataProcessor
                 }
 
                 Project::query()->upsert($projects, ['project_code'], ['company_id', 'name', 'kbli', 'kbli_description', 'sector', 'project_stage', 'issued_at', 'planned_investment', 'planned_tki', 'source_payload', 'updated_at']);
+
+                $storedProjectIds = Project::query()->whereIn('project_code', collect($projects)->pluck('project_code')->unique())->pluck('id', 'project_code');
+                foreach ($storedProjectIds as $projectCode => $projectId) {
+                    LkpmReport::query()
+                        ->whereNull('project_id')
+                        ->where('project_code', $projectCode)
+                        ->update(['project_id' => $projectId]);
+                }
             });
         }
 
@@ -128,26 +137,37 @@ class ImportDataProcessor
     }
 
     /**
-     * @return array{rejected_rows: int, unlinked_reports: int}
+     * @return array{rejected_rows: int, unlinked_reports: int, inserted_reports: int, updated_reports: int}
      */
     private function storeLkpmReports(ImportBatch $batch, string $normalizedPath): array
     {
         LkpmReport::query()->where('import_batch_id', $batch->id)->delete();
         $unlinkedReports = 0;
+        $insertedReports = 0;
+        $updatedReports = 0;
 
         foreach ($this->chunks($normalizedPath) as $rows) {
-            $projectIds = Project::query()->whereIn('project_code', collect($rows)->pluck('project_code')->unique())->pluck('id', 'project_code');
+            $projectCodes = collect($rows)->pluck('project_code')->unique();
+            $projectIds = Project::query()->whereIn('project_code', $projectCodes)->pluck('id', 'project_code');
+            $mappedProjectIds = ProjectCodeMapping::query()->whereIn('lkpm_project_code', $projectCodes)->pluck('project_id', 'lkpm_project_code');
+            $existingReports = LkpmReport::query()
+                ->where('is_canonical', true)
+                ->whereIn('project_code', collect($rows)->pluck('project_code')->unique())
+                ->get()
+                ->keyBy(fn (LkpmReport $report): string => $this->reportKey($report->project_code, $report->report_number, $report->report_year, $report->report_quarter));
             $now = now();
             $reports = [];
+            $updates = [];
 
             foreach ($rows as $row) {
-                if (! isset($projectIds[$row['project_code']])) {
+                $projectId = $projectIds[$row['project_code']] ?? $mappedProjectIds[$row['project_code']] ?? null;
+                if ($projectId === null) {
                     $unlinkedReports++;
                 }
 
-                $reports[] = [
+                $reportData = [
                     'import_batch_id' => $batch->id,
-                    'project_id' => $projectIds[$row['project_code']] ?? null,
+                    'project_id' => $projectId,
                     'project_code' => $row['project_code'],
                     'report_number' => $row['report_number'],
                     'report_year' => $row['report_year'],
@@ -168,12 +188,27 @@ class ImportDataProcessor
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
+                $reportKey = $this->reportKey($row['project_code'], $row['report_number'], $row['report_year'], $row['report_quarter']);
+
+                if ($existingReports->has($reportKey)) {
+                    $updates[$existingReports->get($reportKey)->id] = $reportData;
+                } else {
+                    $reports[$reportKey] = $reportData;
+                }
             }
 
-            LkpmReport::query()->insert($reports);
+            foreach ($updates as $reportId => $reportData) {
+                LkpmReport::query()->whereKey($reportId)->update($reportData);
+            }
+            if ($reports !== []) {
+                LkpmReport::query()->insert(array_values($reports));
+            }
+
+            $insertedReports += count($reports);
+            $updatedReports += count($updates);
         }
 
-        return ['rejected_rows' => 0, 'unlinked_reports' => $unlinkedReports];
+        return ['rejected_rows' => 0, 'unlinked_reports' => $unlinkedReports, 'inserted_reports' => $insertedReports, 'updated_reports' => $updatedReports];
     }
 
     /**
@@ -229,5 +264,10 @@ class ImportDataProcessor
         }
 
         return date('Y-m-d', strtotime($value)) ?: null;
+    }
+
+    private function reportKey(string $projectCode, ?string $reportNumber, int $reportYear, string $reportQuarter): string
+    {
+        return implode('|', [$projectCode, $reportNumber ?: '-', $reportYear, $reportQuarter]);
     }
 }

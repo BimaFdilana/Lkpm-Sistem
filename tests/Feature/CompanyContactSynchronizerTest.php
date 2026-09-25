@@ -27,13 +27,14 @@ class CompanyContactSynchronizerTest extends TestCase
             'path' => 'imports/LKPM.xlsx',
             'checksum' => str_repeat('a', 64),
         ]);
-        LkpmReport::create([
+        $report = LkpmReport::create([
             'import_batch_id' => $batch->id,
             'project_id' => $project->id,
             'project_code' => $project->project_code,
             'report_year' => 2026,
             'report_quarter' => 'Triwulan III',
             'report_status' => 'Disetujui',
+            'is_canonical' => true,
             'source_payload' => [
                 'KONTAK NAMA' => 'Siti Aminah',
                 'KONTAK HP' => '0812-3456-7890',
@@ -50,6 +51,8 @@ class CompanyContactSynchronizerTest extends TestCase
             'contact_phone' => '+6281234567890',
             'contact_email' => 'siti@example.test',
             'contact_position' => 'Direktur',
+            'contact_source_report_id' => $report->id,
         ]);
+        $this->assertNotNull($company->fresh()->contact_synced_at);
     }
 }

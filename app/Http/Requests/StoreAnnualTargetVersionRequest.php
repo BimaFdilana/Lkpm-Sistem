@@ -7,11 +7,16 @@ use Illuminate\Validation\Validator;
 
 class StoreAnnualTargetVersionRequest extends FormRequest
 {
-    public function authorize(): bool { return $this->user()?->role === 'kepala_dinas'; }
+    public function authorize(): bool
+    {
+        return $this->user()?->role === 'kepala_dinas';
+    }
+
     public function rules(): array
     {
         return ['year' => ['required', 'integer', 'min:2021', 'max:2100'], 'annual_target' => ['required', 'integer', 'min:1'], 'reason' => ['required', 'string', 'min:10', 'max:2000'], 'tw_1' => ['required', 'integer', 'min:0'], 'tw_2' => ['required', 'integer', 'min:0'], 'tw_3' => ['required', 'integer', 'min:0'], 'tw_4' => ['required', 'integer', 'min:0']];
     }
+
     public function after(): array
     {
         return [function (Validator $validator): void {

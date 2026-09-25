@@ -2,6 +2,7 @@
 
 namespace App;
 
+use App\Models\ImportBatch;
 use App\Models\Setting;
 use App\Models\User;
 use Google\Client;
@@ -74,6 +75,53 @@ class GoogleDriveStorage
         $drive->files->get($folderId, ['fields' => 'id', 'supportsAllDrives' => true]);
 
         return true;
+    }
+
+    /** @return array<string, string> */
+    public function verifyFolderStructure(): array
+    {
+        $folderIds = [
+            'root' => config('services.google_drive.root_folder_id'),
+            'DP.Proyek' => config('services.google_drive.projects_folder_id'),
+            'Laporan LKPM' => config('services.google_drive.lkpm_folder_id'),
+            'Peta sektor' => config('services.google_drive.sectors_folder_id'),
+            'Impor gagal' => config('services.google_drive.failed_imports_folder_id'),
+            'Arsip' => config('services.google_drive.archive_folder_id'),
+        ];
+
+        foreach ($folderIds as $label => $folderId) {
+            if (! is_string($folderId) || $folderId === '') {
+                throw new RuntimeException("Folder Google Drive {$label} belum dikonfigurasi.");
+            }
+        }
+
+        $drive = new Drive($this->client());
+        $verified = [];
+        $rootFolderId = $folderIds['root'];
+        foreach ($folderIds as $label => $folderId) {
+            $folder = $drive->files->get($folderId, ['fields' => 'id,name,mimeType,parents', 'supportsAllDrives' => true]);
+            if ($folder->mimeType !== 'application/vnd.google-apps.folder') {
+                throw new RuntimeException("Konfigurasi {$label} bukan folder Google Drive.");
+            }
+            if ($label !== 'root' && ! in_array($rootFolderId, $folder->parents ?? [], true)) {
+                throw new RuntimeException("Folder {$label} tidak berada langsung di dalam folder utama.");
+            }
+            $verified[$label] = $folder->name;
+        }
+
+        return $verified;
+    }
+
+    /** @return array{id: string, name: string, url: ?string} */
+    public function archive(ImportBatch $batch): array
+    {
+        return $this->move($batch, 'archive_folder_id', 'ARSIP');
+    }
+
+    /** @return array{id: string, name: string, url: ?string} */
+    public function markAsFailed(ImportBatch $batch): array
+    {
+        return $this->move($batch, 'failed_imports_folder_id', 'GAGAL');
     }
 
     private function client(): Client
@@ -175,5 +223,43 @@ class GoogleDriveStorage
         }
 
         return $folderId;
+    }
+
+    /** @return array{id: string, name: string, url: ?string} */
+    private function move(ImportBatch $batch, string $destinationKey, string $prefix): array
+    {
+        if (! is_string($batch->drive_file_id) || $batch->drive_file_id === '') {
+            throw new RuntimeException('File Google Drive pada batch impor belum tersedia.');
+        }
+
+        $destinationFolderId = config('services.google_drive.'.$destinationKey);
+        if (! is_string($destinationFolderId) || $destinationFolderId === '') {
+            throw new RuntimeException('Folder tujuan Google Drive belum dikonfigurasi.');
+        }
+
+        $drive = new Drive($this->client());
+        $existing = $drive->files->get($batch->drive_file_id, [
+            'fields' => 'id,name,parents',
+            'supportsAllDrives' => true,
+        ]);
+        $currentParents = $existing->parents ?? [];
+        $archiveName = sprintf('%s_%s_BATCH-%d_%s', $prefix, $batch->created_at->format('Y-m-d'), $batch->id, $batch->original_name);
+        $options = [
+            'addParents' => $destinationFolderId,
+            'fields' => 'id,name,webViewLink,parents',
+            'supportsAllDrives' => true,
+        ];
+
+        if ($currentParents !== []) {
+            $options['removeParents'] = implode(',', $currentParents);
+        }
+
+        $movedFile = $drive->files->update(
+            $batch->drive_file_id,
+            new DriveFile(['name' => $archiveName]),
+            $options,
+        );
+
+        return ['id' => $movedFile->id, 'name' => $movedFile->name, 'url' => $movedFile->webViewLink];
     }
 }

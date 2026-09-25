@@ -47,4 +47,39 @@ class DailyPriorityEngineTest extends TestCase
         $this->assertSame(1, DailyPrioritySnapshot::count());
         $this->assertSame(900, (int) DailyPrioritySnapshot::firstOrFail()->monitoring_accumulated_investment);
     }
+
+    public function test_historical_projection_uses_only_the_latest_approved_report_in_each_quarter(): void
+    {
+        $operator = User::factory()->create();
+        $batch = ImportBatch::create(['uploaded_by' => $operator->id, 'source_type' => 'lkpm', 'original_name' => 'LKPM.xlsx', 'path' => 'imports/LKPM.xlsx', 'checksum' => str_repeat('b', 64)]);
+        $period = TargetPeriod::create(['year' => 2026, 'quarter' => 'TW IV', 'target_amount' => 2000, 'buffer_amount' => 2600]);
+        $company = Company::create(['nib' => '1234567890456', 'name' => 'PT Riwayat Valid', 'business_scale' => 'Usaha Menengah']);
+        $project = Project::create(['company_id' => $company->id, 'project_code' => 'P-HISTORY', 'planned_investment' => 3000]);
+
+        foreach ([
+            ['Triwulan I', '2026-03-10', 100],
+            ['Triwulan II', '2026-06-10', 300],
+            ['Triwulan II', '2026-06-15', 350],
+            ['Triwulan III', '2026-09-15', 500],
+        ] as [$quarter, $reportedAt, $accumulated]) {
+            LkpmReport::create([
+                'import_batch_id' => $batch->id,
+                'project_id' => $project->id,
+                'project_code' => $project->project_code,
+                'report_year' => 2026,
+                'report_quarter' => $quarter,
+                'reported_at' => $reportedAt,
+                'report_status' => 'Disetujui',
+                'accumulated_investment' => $accumulated,
+                'is_canonical' => true,
+            ]);
+        }
+
+        app(DailyPriorityEngine::class)->snapshot($period, Carbon::parse('2026-10-01'), $batch->id);
+        $snapshot = DailyPrioritySnapshot::firstOrFail();
+
+        $this->assertSame(500, $snapshot->baseline_accumulated_investment);
+        $this->assertSame(200, $snapshot->historical_quarterly_realization);
+        $this->assertSame(200, $snapshot->projected_contribution);
+    }
 }

@@ -27,7 +27,9 @@ class DailySnapshotRecorder
             'created_at' => now(),
             'updated_at' => now(),
         ])->values()->all();
-        foreach (array_chunk($rows, 500) as $chunk) DailyProjectSnapshot::query()->upsert($chunk, ['project_id', 'year', 'quarter', 'snapshot_date'], ['import_batch_id', 'lkpm_report_id', 'report_status', 'accumulated_investment', 'is_valid_realization', 'updated_at']);
+        foreach (array_chunk($rows, 500) as $chunk) {
+            DailyProjectSnapshot::query()->upsert($chunk, ['project_id', 'year', 'quarter', 'snapshot_date'], ['import_batch_id', 'lkpm_report_id', 'report_status', 'accumulated_investment', 'is_valid_realization', 'updated_at']);
+        }
 
         return count($rows);
     }

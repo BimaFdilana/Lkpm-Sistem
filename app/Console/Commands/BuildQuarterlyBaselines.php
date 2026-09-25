@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 class BuildQuarterlyBaselines extends Command
 {
     protected $signature = 'lkpm:build-quarterly-baselines {--from=2021} {--to=2026}';
+
     protected $description = 'Membangun ulang baseline dan momentum LKPM per proyek untuk periode historis.';
 
     public function handle(QuarterlyBaselineBuilder $builder): int

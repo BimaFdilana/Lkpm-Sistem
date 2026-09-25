@@ -29,7 +29,9 @@ class QuarterlyBaselineBuilder
             for ($year = $fromYear; $year <= $toYear; $year++) {
                 foreach (['Triwulan I', 'Triwulan II', 'Triwulan III', 'Triwulan IV'] as $quarter) {
                     $report = $byPeriod->get($year.'|'.$quarter);
-                    if ($report === null) continue;
+                    if ($report === null) {
+                        continue;
+                    }
                     $baselineKnown = $previous !== null;
                     $rows[] = [
                         'project_id' => $report->project_id,

@@ -5,8 +5,8 @@ namespace App;
 use App\Models\Assignment;
 use App\Models\DailyPrioritySnapshot;
 use App\Models\LkpmReport;
-use App\Models\Project;
 use App\Models\PriorityProjectBaseline;
+use App\Models\Project;
 use App\Models\TargetPeriod;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -46,6 +46,7 @@ class DailyPriorityEngine
             $row['remaining_target'] = $remainingTarget;
             $row['priority_score'] = $row['projected_contribution'] === null ? null : round(($row['projected_contribution'] / max(1, $remainingTarget)) * 100 * $urgency * ($row['valid_momentum'] === 0 ? 1.2 : 1.0), 4);
             $row['calculation_meta']['urgency_factor'] = $urgency;
+
             return $row;
         });
 
@@ -68,6 +69,7 @@ class DailyPriorityEngine
             $row['priority_rank'] = $index + 1;
             $row['candidate_tier'] = $coverage < $primaryLimit ? 'hijau' : ($coverage < $reserveLimit ? 'cadangan' : 'monitoring');
             $coverage += $amount;
+
             return $row;
         });
         $rankByProject = $ranked->flatMap(fn (array $row) => collect($row['project_ids'])->mapWithKeys(fn (int $projectId) => [$projectId => $row]));
@@ -136,16 +138,32 @@ class DailyPriorityEngine
     private function baselineFor(Project $project, TargetPeriod $period, string $quarterLabel): PriorityProjectBaseline
     {
         $existing = PriorityProjectBaseline::query()->where(['target_period_id' => $period->id, 'project_id' => $project->id])->first();
-        if ($existing) return $existing;
-        $approved = $project->reports->where('report_status', 'Disetujui')->sortBy(fn (LkpmReport $r) => sprintf('%04d-%02d-%010d', $r->report_year, $this->quarterNumber($r->report_quarter), $r->id))->values();
-        $prior = $approved->filter(fn (LkpmReport $r) => $r->report_year < $period->year || ($r->report_year === $period->year && $this->quarterNumber($r->report_quarter) < $this->quarterNumber($quarterLabel)));
-        $deltas = $approved->filter(fn (LkpmReport $r) => $r->report_year < $period->year || ($r->report_year === $period->year && $this->quarterNumber($r->report_quarter) < $this->quarterNumber($quarterLabel)))->values()->map(fn (LkpmReport $r, int $i) => $i ? max(0, (int) $r->accumulated_investment - (int) $prior->values()[$i - 1]->accumulated_investment) : null)->filter(fn ($v) => $v !== null)->take(-4);
+        if ($existing) {
+            return $existing;
+        }
+        $approvedQuarterEnds = $project->reports
+            ->where('report_status', 'Disetujui')
+            ->groupBy(fn (LkpmReport $report): string => $report->report_year.'-'.$this->quarterNumber($report->report_quarter))
+            ->map(fn (Collection $quarterReports): LkpmReport => $quarterReports
+                ->sortBy(fn (LkpmReport $report): string => sprintf('%020d-%010d', $report->reported_at?->getTimestamp() ?? 0, $report->id))
+                ->last())
+            ->sortBy(fn (LkpmReport $report): string => sprintf('%04d-%02d', $report->report_year, $this->quarterNumber($report->report_quarter)))
+            ->values();
+        $prior = $approvedQuarterEnds
+            ->filter(fn (LkpmReport $report): bool => $report->report_year < $period->year || ($report->report_year === $period->year && $this->quarterNumber($report->report_quarter) < $this->quarterNumber($quarterLabel)))
+            ->values();
+        $deltas = $prior
+            ->map(fn (LkpmReport $report, int $index): ?int => $index === 0 ? null : max(0, (int) $report->accumulated_investment - (int) $prior[$index - 1]->accumulated_investment))
+            ->filter(fn (?int $value): bool => $value !== null)
+            ->take(-4);
+
         return PriorityProjectBaseline::create(['target_period_id' => $period->id, 'project_id' => $project->id, 'initial_accumulated_investment' => (int) optional($prior->last())->accumulated_investment, 'historical_quarterly_realization' => $deltas->count() >= 2 ? (int) round($deltas->median()) : null, 'captured_at' => now()]);
     }
 
     private function urgencyFactor(TargetPeriod $period, Carbon $date): float
     {
         $days = $period->reporting_ends_at ? $date->diffInDays($period->reporting_ends_at, false) : 99;
+
         return $days <= 1 ? 2.0 : ($days <= 7 ? 1.6 : ($days <= 14 ? 1.3 : 1.0));
     }
 

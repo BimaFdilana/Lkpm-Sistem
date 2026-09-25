@@ -20,8 +20,23 @@ class DailyPrioritySnapshot extends Model
         return ['snapshot_date' => 'date', 'calculation_meta' => 'array'];
     }
 
-    public function period(): BelongsTo { return $this->belongsTo(TargetPeriod::class, 'target_period_id'); }
-    public function project(): BelongsTo { return $this->belongsTo(Project::class); }
-    public function company(): BelongsTo { return $this->belongsTo(Company::class); }
-    public function importBatch(): BelongsTo { return $this->belongsTo(ImportBatch::class); }
+    public function period(): BelongsTo
+    {
+        return $this->belongsTo(TargetPeriod::class, 'target_period_id');
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function importBatch(): BelongsTo
+    {
+        return $this->belongsTo(ImportBatch::class);
+    }
 }

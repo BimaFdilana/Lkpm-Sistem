@@ -53,7 +53,15 @@
     "Use a confident civic-workspace palette: navy for structure, teal for primary action, amber for priority and coral only for alerts.",
     "Use a persistent sidebar from tablet upward and an accessible collapsible navigation panel on mobile.",
     "Use compact metric cards, clear status pills, and responsive card alternatives for data tables.",
-    "Keep operational verification distinct from LKPM OSS reporting; show its current state as a compact status pill while retaining the follow-up history as the audit trail."
+    "Keep operational verification distinct from LKPM OSS reporting; show its current state as a compact status pill while retaining the follow-up history as the audit trail.",
+    "Show assignment candidates as a dated priority snapshot, using teal for active Hijau targets and amber for standby Cadangan so projected value is never confused with official realization.",
+    "When no forecastable target exists, expose Amber only as an explicitly labeled verification workload; its gap may order contact work but must never be styled or counted as target projection.",
+    "For Kabag, combine current priorities and snapshot history as tabs on one page, and place the snapshot creation action on the dashboard.",
+    "Show all snapshot companies in one paginated priority queue; distinguish assigned, pending verification, and non-assignable rows while capping the initial PIC distribution at 100 total companies.",
+    "For Kepala Bagian, keep assigned PIC work and the Candidates priority table as separate sections on the same Assignment PIC page, with the distribution action directly above the Candidates table.",
+    "On the Kadis dashboard, present LKPM Disetujui for all four quarters as compact cards; quarters without any imported report data use a dark inactive state distinct from an available quarter with zero approvals.",
+    "Keep Kadis's schedule card focused on timing; combine the editable annual target, remaining amount, and rose progress bar in one annual achievement card, with the edit action on a pencil disclosure.",
+    "On Kadis's dashboard, place annual and active-quarter achievement cards side by side on wide screens; list any recorded prior-quarter shortfalls as informational, never automatically adding them to an already-set active target."
   ],
   "evidence": [
     {

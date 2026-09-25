@@ -12,6 +12,7 @@ class CompanyContactSynchronizer
         $contacts = [];
 
         LkpmReport::query()
+            ->where('is_canonical', true)
             ->whereNotNull('project_id')
             ->with('project.company')
             ->orderBy('reported_at')
@@ -33,6 +34,8 @@ class CompanyContactSynchronizer
                     'contact_phone' => $company->contact_phone,
                     'contact_email' => $company->contact_email,
                     'contact_position' => $company->contact_position,
+                    'contact_source_report_id' => $company->contact_source_report_id,
+                    'contact_synced_at' => $company->contact_synced_at,
                 ];
 
                 $contacts[$company->id] = [
@@ -40,6 +43,8 @@ class CompanyContactSynchronizer
                     'contact_phone' => $this->phoneOrCurrent($contactPhone, $current['contact_phone']),
                     'contact_email' => $this->valueOrCurrent($contactEmail, $current['contact_email']),
                     'contact_position' => $this->valueOrCurrent($contactPosition, $current['contact_position']),
+                    'contact_source_report_id' => $report->id,
+                    'contact_synced_at' => now(),
                 ];
             });
 

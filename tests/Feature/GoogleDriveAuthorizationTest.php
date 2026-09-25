@@ -62,4 +62,28 @@ class GoogleDriveAuthorizationTest extends TestCase
             ->get(route('google-drive.callback', ['state' => 'unexpected-state', 'code' => 'authorization-code']))
             ->assertForbidden();
     }
+
+    public function test_kepala_bagian_can_verify_the_configured_drive_folder_structure(): void
+    {
+        $user = User::factory()->create(['role' => 'kepala_bagian']);
+        $this->mock(GoogleDriveStorage::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('verifyFolderStructure')->once()->andReturn([
+                'root' => 'LKPM Satgas',
+                'DP.Proyek' => '01-RAW-DP-PROYEK',
+                'Laporan LKPM' => '02-LAPORAN_EKSPOR',
+                'Peta sektor' => '03-PETA-SEKTOR',
+                'Impor gagal' => '04-IMPORT-GAGAL',
+                'Arsip' => '05-ARSIP',
+            ]);
+        });
+
+        $this->actingAs($user)->post(route('google-drive.verify'))->assertRedirect(route('imports.index'))->assertSessionHas('status');
+    }
+
+    public function test_pic_cannot_verify_google_drive_folders(): void
+    {
+        $pic = User::factory()->create(['role' => 'pic']);
+
+        $this->actingAs($pic)->post(route('google-drive.verify'))->assertForbidden();
+    }
 }

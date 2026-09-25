@@ -41,4 +41,17 @@ class GoogleDriveAuthorizationController extends Controller
 
         return redirect()->route('imports.index')->with('status', 'Google Drive terhubung. File impor akan disimpan menggunakan akun Google Drive yang baru diotorisasi.');
     }
+
+    public function verify(GoogleDriveStorage $googleDriveStorage): RedirectResponse
+    {
+        try {
+            $folders = $googleDriveStorage->verifyFolderStructure();
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('imports.index')->withErrors(['file' => 'Struktur folder Google Drive belum valid: '.$exception->getMessage()]);
+        }
+
+        return redirect()->route('imports.index')->with('status', count($folders).' folder Google Drive dapat diakses dan strukturnya valid.');
+    }
 }

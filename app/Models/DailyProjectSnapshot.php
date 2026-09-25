@@ -14,7 +14,18 @@ class DailyProjectSnapshot extends Model
         return ['snapshot_date' => 'date', 'is_valid_realization' => 'boolean'];
     }
 
-    public function project(): BelongsTo { return $this->belongsTo(Project::class); }
-    public function importBatch(): BelongsTo { return $this->belongsTo(ImportBatch::class); }
-    public function report(): BelongsTo { return $this->belongsTo(LkpmReport::class, 'lkpm_report_id'); }
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    public function importBatch(): BelongsTo
+    {
+        return $this->belongsTo(ImportBatch::class);
+    }
+
+    public function report(): BelongsTo
+    {
+        return $this->belongsTo(LkpmReport::class, 'lkpm_report_id');
+    }
 }

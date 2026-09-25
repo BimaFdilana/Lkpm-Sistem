@@ -1,0 +1,30 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('companies', function (Blueprint $table) {
+            $table->foreignId('contact_source_report_id')->nullable()->after('contact_position')->constrained('lkpm_reports')->nullOnDelete();
+            $table->timestamp('contact_synced_at')->nullable()->after('contact_source_report_id');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('companies', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('contact_source_report_id');
+            $table->dropColumn('contact_synced_at');
+        });
+    }
+};
